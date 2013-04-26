@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -128,16 +129,24 @@ func (pack *Package) ThreeMembers() (memberA PackageMember, memberB PackageMembe
 func (pack *Package) Dump() {
 	if package_logger.ModuleLevelCheck(package_logHandler, log.LOG_LEVEL_DEBUG) {
 		package_logger.ForcePrintf("Package(MsgID: %d)\n", pack.MsgId)
-		for k, member := range *pack.members {
-			package_logger.ForcePrintf("\t%c: %s\n", k, string(*member))
+		if pack.members != nil && len(*pack.members) > 0 {
+			for k, member := range *pack.members {
+				package_logger.ForcePrintf("\t%c: %s\n", k, string(*member))
+			}
+		} else {
+			package_logger.ForcePrintf("\tEMPTY\n")
 		}
 	}
 }
 
 func (pack *Package) DumpStdout() {
 	fmt.Printf("Package(MsgID: %d)\n", pack.MsgId)
-	for k, member := range *pack.members {
-		fmt.Printf("\t%c: %s\n", k, string(*member))
+	if pack.members != nil && len(*pack.members) > 0 {
+		for k, member := range *pack.members {
+			fmt.Printf("\t%c: %s\n", k, string(*member))
+		}
+	} else {
+		fmt.Printf("\tEMPTY\n")
 	}
 }
 
@@ -181,6 +190,47 @@ func ParsePackageForHtml(msgId uint16, resp *http.Response) (pack *Package, err 
 	if err != nil {
 		return nil, err
 	}
+	return
+}
+
+func ParsePackageForHtmlRequest(req *http.Request) (pack *Package, err error) {
+	// Get last part of URI as message ID
+	if len(req.RequestURI) == 0 {
+		package_logger.ModulePrintf(package_logHandler, log.LOG_LEVEL_TRACE, "Request URI is empty! from %s", req.RemoteAddr)
+		return nil, errors.New("Request URI is empty")
+	}
+	parts := strings.Split(req.RequestURI, "/")
+	function := parts[len(parts)-1]
+	var msgId int
+	if msgId, err = strconv.Atoi(function); err != nil {
+		return nil, err
+	}
+
+	pack = &Package{
+		MsgId: uint16(msgId),
+	}
+	members := make(PackageMembers)
+	pack.members = &members
+
+	if err = req.ParseForm(); err != nil {
+		package_logger.ModulePrintf(package_logHandler, log.LOG_LEVEL_TRACE, "Parse form err: %s! from %s", err.Error(), req.RemoteAddr)
+		return nil, err
+	}
+	for key, value := range req.Form {
+		if len(key) != 1 {
+			package_logger.ModulePrintf(package_logHandler, log.LOG_LEVEL_TRACE, "Member key %s from %s\n", key, req.RemoteAddr)
+			continue
+		}
+		valueLen := len(value)
+		if valueLen == 0 {
+			package_logger.ModulePrintf(package_logHandler, log.LOG_LEVEL_TRACE, "Member value is empty from %s\n", key, req.RemoteAddr)
+			continue
+		}
+		valueBytes := []byte(value[0])
+		pack.AddMember([]byte(key)[0], &valueBytes)
+		pack.dataSize += uint16(3 + len(valueBytes))
+	}
+
 	return
 }
 
