@@ -47,6 +47,10 @@ func InitPackageLog(logger *log.Logger) {
 	package_logHandler = logger.LoggerModule(PACKAGE_LOG_NAME)
 }
 
+func (pack *Package) DataSize() uint16 {
+	return pack.dataSize
+}
+
 func (pack *Package) Members() *PackageMembers {
 	return pack.members
 }
@@ -329,7 +333,6 @@ func (pack *Package) Write(writer io.Writer) (n int, err error) {
 		return
 	}
 	tn, err = writer.Write(headData)
-	//  fmt.Printf("len(headData): %d, tn: %d\n", len(headData), tn)
 	if err != nil {
 		return
 	}
